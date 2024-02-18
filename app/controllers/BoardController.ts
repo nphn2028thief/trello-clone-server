@@ -46,6 +46,29 @@ class BoardController {
       return responseServer.error(res);
     }
   }
+
+  async getBoardByOrgIdAndBoardId(req: Request, res: Response) {
+    const { organizationId, boardId } = req.params;
+
+    if (!organizationId || !boardId) {
+      return responseServer.badRequest(res);
+    }
+
+    try {
+      const board = await BoardSchema.findOne({
+        organizationId,
+        _id: boardId,
+      }).lean();
+
+      if (!board) {
+        return responseServer.notFound(res, "Board is not found!");
+      }
+
+      return res.json(board);
+    } catch (error) {
+      return responseServer.error(res);
+    }
+  }
 }
 
 export default new BoardController();
