@@ -9,6 +9,8 @@ const boardRoutes = (router: Router) => {
     "/boards/:organizationId/:boardId",
     BoardController.getBoardByOrgIdAndBoardId
   );
+  router.patch("/board/:id", BoardController.updateBoard);
+  router.delete("/board/:id", BoardController.deleteBoard);
 };
 
 export default boardRoutes;
