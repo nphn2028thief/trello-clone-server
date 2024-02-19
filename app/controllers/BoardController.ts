@@ -69,6 +69,60 @@ class BoardController {
       return responseServer.error(res);
     }
   }
+
+  async updateBoard(req: Request, res: Response) {
+    const { id } = req.params;
+    const { title } = req.body;
+
+    if (!id) {
+      return responseServer.badRequest(res, "Board is invalid!");
+    }
+
+    try {
+      const updatedBoard = await BoardSchema.findByIdAndUpdate(
+        id,
+        {
+          $set: {
+            title,
+          },
+        },
+        {
+          new: true,
+        }
+      );
+
+      if (!updatedBoard) {
+        return responseServer.notFound(res, "Board not found!");
+      }
+
+      return responseServer.success(
+        res,
+        "Updated board!",
+        "data",
+        updatedBoard
+      );
+    } catch (error) {
+      return responseServer.error(res);
+    }
+  }
+
+  async deleteBoard(req: Request, res: Response) {
+    const { id } = req.params;
+
+    if (!id) {
+      return responseServer.badRequest(res);
+    }
+
+    try {
+      const deletedBoard = await BoardSchema.findByIdAndDelete(id);
+
+      if (!deletedBoard) {
+        return responseServer.notFound(res, "Board not found!");
+      }
+
+      return responseServer.success(res, "Board deleted!");
+    } catch (error) {}
+  }
 }
 
 export default new BoardController();
