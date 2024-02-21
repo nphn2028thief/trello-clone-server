@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 
 import responseServer from "../configs/responseServer";
 import BoardSchema from "../models/BoardSchema";
+import ListSchema from "../models/ListSchema";
 import { IImage } from "../types/board";
 
 class BoardController {
@@ -114,11 +115,13 @@ class BoardController {
     }
 
     try {
-      const deletedBoard = await BoardSchema.findByIdAndDelete(id);
+      const board = await BoardSchema.findByIdAndDelete(id).lean();
 
-      if (!deletedBoard) {
+      if (!board) {
         return responseServer.notFound(res, "Board not found!");
       }
+
+      await ListSchema.deleteMany({ _id: board.listIds });
 
       return responseServer.success(res, "Board deleted!");
     } catch (error) {}
