@@ -10,4 +10,5 @@ export interface IBoard {
   organizationId: string;
   title: string;
   image: IImage;
+  listIds: string[];
 }
