@@ -7,7 +7,7 @@ export interface IImage {
 }
 
 export interface IBoard {
-  organizationId: string;
+  orgId: string;
   title: string;
   image: IImage;
   listIds: string[];

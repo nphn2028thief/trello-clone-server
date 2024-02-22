@@ -4,7 +4,7 @@ import { IBoard } from "../types/board";
 
 const BoardSchema = new Schema<IBoard>(
   {
-    organizationId: { type: String, required: true },
+    orgId: { type: String, required: true },
     title: { type: String, require: true },
     image: {
       id: { type: String, required: true },

@@ -7,9 +7,9 @@ import { IImage } from "../types/board";
 
 class BoardController {
   async createBoard(req: Request, res: Response) {
-    const { organizationId, title, image } = req.body;
+    const { orgId, title, image } = req.body;
 
-    if (!organizationId || !title || !image) {
+    if (!orgId || !title || !image) {
       return responseServer.badRequest(res);
     }
 
@@ -23,7 +23,7 @@ class BoardController {
       };
 
       await BoardSchema.create({
-        organizationId,
+        orgId,
         title,
         image: storageImage,
       });
@@ -33,32 +33,32 @@ class BoardController {
     }
   }
 
-  async getBoardsByOrgId(req: Request, res: Response) {
-    const { organizationId } = req.params;
+  async getBoards(req: Request, res: Response) {
+    const { orgId } = req.params;
 
-    if (!organizationId) {
+    if (!orgId) {
       return responseServer.badRequest(res, "Organization is required!");
     }
 
     try {
-      const boards = await BoardSchema.find({ organizationId }).lean();
+      const boards = await BoardSchema.find({ orgId }).lean();
       return res.json(boards);
     } catch (error) {
       return responseServer.error(res);
     }
   }
 
-  async getBoardByOrgIdAndBoardId(req: Request, res: Response) {
-    const { organizationId, boardId } = req.params;
+  async getBoardById(req: Request, res: Response) {
+    const { orgId, boardId } = req.params;
 
-    if (!organizationId || !boardId) {
+    if (!orgId || !boardId) {
       return responseServer.badRequest(res);
     }
 
     try {
       const board = await BoardSchema.findOne({
-        organizationId,
         _id: boardId,
+        orgId,
       }).lean();
 
       if (!board) {
