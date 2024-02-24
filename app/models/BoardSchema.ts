@@ -22,4 +22,6 @@ const BoardSchema = new Schema<IBoard>(
   }
 );
 
+BoardSchema.index({ orgId: 1 });
+
 export default model<IBoard>("Board", BoardSchema);
