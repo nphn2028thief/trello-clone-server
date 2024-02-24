@@ -1,5 +1,16 @@
+import { ICard } from "./card";
+
 export interface IList {
   title: string;
   order: number;
-  cardIds: string[];
+  boardId: string;
+}
+
+export interface IUpdateOrderList {
+  lists: {
+    _id: string;
+    title: string;
+    order: number;
+    cards: ICard[];
+  }[];
 }

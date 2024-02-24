@@ -1,10 +1,10 @@
 import { Request, Response } from "express";
-import _ from "lodash";
+import mongoose from "mongoose";
 
 import responseServer from "../configs/responseServer";
-import BoardSchema from "../models/BoardSchema";
 import ListSchema from "../models/ListSchema";
 import CardSchema from "../models/CardSchema";
+import { IUpdateOrderList } from "../types/list";
 
 class ListController {
   async createList(req: Request, res: Response) {
@@ -15,33 +15,13 @@ class ListController {
     }
 
     try {
-      const board = await BoardSchema.findOne({
-        _id: boardId,
-        orgId,
-      })
-        .lean()
-        .populate("listIds");
+      const lengthOfList = await ListSchema.find({ boardId }).lean();
 
-      if (!board) {
-        return responseServer.notFound(res, "Board not found!");
-      }
-
-      const lengthOfList = board.listIds.length;
-
-      const createdList = await ListSchema.create({
+      await ListSchema.create({
         title,
-        order: lengthOfList ? lengthOfList + 1 : 1,
+        order: lengthOfList ? lengthOfList.length + 1 : 1,
+        boardId,
       });
-
-      await BoardSchema.findByIdAndUpdate(
-        board._id,
-        {
-          $push: {
-            listIds: createdList._id,
-          },
-        },
-        { new: true }
-      );
 
       return responseServer.success(res, `List "${title}" created!`);
     } catch (error) {
@@ -57,33 +37,27 @@ class ListController {
     }
 
     try {
-      // Get list with board id in 1-n relationship
-      const board = await BoardSchema.findOne({
-        _id: boardId,
-        orgId,
-      }).lean();
-
-      if (!board) {
-        return responseServer.notFound(res, "Board not found!");
-      }
-
-      const listsId = board.listIds;
-
-      const lists = await ListSchema.find({
-        _id: {
-          $in: listsId,
-        },
-      })
+      // Get all list documents by boardId
+      const lists = await ListSchema.find({ boardId })
         .lean()
-        .populate("cardIds")
         .sort({ order: "asc" });
 
-      return res.json(
-        lists.map((item) => ({
-          ..._.omit(item, "cardIds"),
-          cards: item.cardIds,
-        }))
-      );
+      const listIds = lists.map((list) => list._id);
+
+      // Get all card documents have listId belonging to lists
+      const cards = await CardSchema.find({ listId: { $in: listIds } })
+        .lean()
+        .sort({ order: "asc" });
+
+      // Filter card documents with listId belonging to lists
+      const listsWithCards = lists.map((list) => ({
+        ...list,
+        cards: cards.filter(
+          (card) => card.listId.toString() === list._id.toHexString()
+        ),
+      }));
+
+      return res.json(listsWithCards);
     } catch (error) {
       return responseServer.error(res);
     }
@@ -98,6 +72,7 @@ class ListController {
     }
 
     try {
+      // Update title of list document
       const updatedList = await ListSchema.findByIdAndUpdate(id, {
         $set: {
           title,
@@ -114,25 +89,53 @@ class ListController {
     }
   }
 
-  async copyList(req: Request, res: Response) {
-    const { listId, title, boardId, orgId, cards } = req.body;
+  async updateListOrder(req: Request, res: Response) {
+    const { lists } = req.body as IUpdateOrderList;
 
-    if (!listId || !title || !boardId || !orgId) {
+    if (!lists) {
       return responseServer.badRequest(res);
     }
 
     try {
-      const board = await BoardSchema.findOne({
-        _id: boardId,
-        orgId,
-      })
-        .lean()
-        .populate("listIds");
+      const bulkOps = lists.map(({ _id, order }) => ({
+        updateOne: {
+          filter: { _id: mongoose.Types.ObjectId.createFromHexString(_id) }, // Filter by _id
+          update: { order }, // Set the new order
+        },
+      }));
 
-      if (!board) {
-        return responseServer.notFound(res, "Board not found!");
-      }
+      // Use bulkWrite to perform multiple update operations
+      await ListSchema.bulkWrite(bulkOps);
 
+      return responseServer.success(res);
+
+      // for (const i in lists.reverse()) {
+      //   const list = lists[i];
+      //   await ListSchema.findByIdAndUpdate(list._id, {
+      //     $set: {
+      //       order: i,
+      //     },
+      //   });
+
+      //   console.log(list);
+      // }
+
+      // res.send("Hello");
+    } catch (error) {
+      console.log(error);
+      return responseServer.error(res);
+    }
+  }
+
+  async copyList(req: Request, res: Response) {
+    const { listId, title, cards } = req.body;
+
+    if (!listId || !title) {
+      return responseServer.badRequest(res);
+    }
+
+    try {
+      // Find list document by id
       const list = await ListSchema.findById(listId).lean();
 
       if (!list) {
@@ -141,10 +144,7 @@ class ListController {
 
       let createdCards;
 
-      if (cards.length) {
-        createdCards = await CardSchema.insertMany(cards);
-      }
-
+      // Update all order of list documents increased by 1
       await ListSchema.updateMany(
         {
           order: {
@@ -158,21 +158,22 @@ class ListController {
         }
       );
 
-      const createdList = await ListSchema.create({
+      // Create list document
+      const listCreated = await ListSchema.create({
         title: `${title} - Copy`,
         order: list ? list.order + 1 : 1,
-        cardIds: createdCards || [],
+        boardId: list.boardId,
       });
 
-      await BoardSchema.findByIdAndUpdate(
-        board._id,
-        {
-          $push: {
-            listIds: createdList._id,
-          },
-        },
-        { new: true }
-      );
+      if (cards.length) {
+        // Insert all card in source list to copy list
+        createdCards = await CardSchema.insertMany(
+          cards.map((item: any) => ({
+            ...item,
+            listId: listCreated._id,
+          }))
+        );
+      }
 
       return responseServer.success(res, `List ${title} copied!`);
     } catch (error) {
@@ -181,9 +182,9 @@ class ListController {
   }
 
   async deleteList(req: Request, res: Response) {
-    const { id, boardId, orgId } = req.params;
+    const { id } = req.params;
 
-    if (!id || !boardId || !orgId) {
+    if (!id) {
       return responseServer.badRequest(res, "List is invalid!");
     }
 
@@ -194,6 +195,14 @@ class ListController {
         return responseServer.notFound(res, "List not found!");
       }
 
+      // Delete all card documents have listId belonging to deletedList
+      await CardSchema.deleteMany({
+        listId: {
+          $in: deletedList._id,
+        },
+      });
+
+      // Re-update all order of list documents
       await ListSchema.updateMany(
         {
           order: {
@@ -204,18 +213,6 @@ class ListController {
           $inc: {
             order: -1,
           },
-        }
-      );
-
-      await BoardSchema.findOneAndUpdate(
-        { _id: boardId, orgId },
-        {
-          $pull: {
-            listIds: deletedList._id,
-          },
-        },
-        {
-          new: true,
         }
       );
 

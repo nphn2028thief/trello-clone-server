@@ -7,6 +7,7 @@ const CardSchema = new Schema<ICard>(
     title: { type: String, require: true },
     description: { type: String, default: null },
     order: { type: Number, default: null },
+    listId: { type: String, ref: "List" },
   },
   {
     timestamps: {
