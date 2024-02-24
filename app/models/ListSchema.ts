@@ -16,4 +16,6 @@ const ListSchema = new Schema<IList>(
   }
 );
 
+ListSchema.index({ order: 1 });
+
 export default model<IList>("List", ListSchema);

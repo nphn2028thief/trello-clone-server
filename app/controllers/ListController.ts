@@ -108,19 +108,6 @@ class ListController {
       await ListSchema.bulkWrite(bulkOps);
 
       return responseServer.success(res);
-
-      // for (const i in lists.reverse()) {
-      //   const list = lists[i];
-      //   await ListSchema.findByIdAndUpdate(list._id, {
-      //     $set: {
-      //       order: i,
-      //     },
-      //   });
-
-      //   console.log(list);
-      // }
-
-      // res.send("Hello");
     } catch (error) {
       console.log(error);
       return responseServer.error(res);

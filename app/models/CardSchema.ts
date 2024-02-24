@@ -17,4 +17,6 @@ const CardSchema = new Schema<ICard>(
   }
 );
 
+CardSchema.index({ order: 1 });
+
 export default model<ICard>("Card", CardSchema);
