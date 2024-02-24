@@ -10,5 +10,4 @@ export interface IBoard {
   orgId: string;
   title: string;
   image: IImage;
-  listIds: string[];
 }

@@ -13,7 +13,6 @@ const BoardSchema = new Schema<IBoard>(
       username: { type: String, required: true },
       linkHtml: { type: String, required: true },
     },
-    listIds: [{ type: String, ref: "List" }],
   },
   {
     timestamps: {
