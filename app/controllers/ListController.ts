@@ -52,9 +52,12 @@ class ListController {
       // Filter card documents with listId belonging to lists
       const listsWithCards = lists.map((list) => ({
         ...list,
-        cards: cards.filter(
-          (card) => card.listId.toString() === list._id.toHexString()
-        ),
+        cards: cards
+          .filter((card) => card.listId.toString() === list._id.toHexString())
+          .map((item) => ({
+            ...item,
+            listTitle: list.title,
+          })),
       }));
 
       return res.json(listsWithCards);
