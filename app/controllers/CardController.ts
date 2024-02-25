@@ -88,6 +88,102 @@ class CardController {
       return responseServer.error(res);
     }
   }
+
+  async updateCard(req: Request, res: Response) {
+    const { id } = req.params;
+    const { title, description } = req.body;
+
+    if (!id) {
+      return responseServer.badRequest(res, "Card is invalid!");
+    }
+
+    try {
+      const updatedCard = await CardSchema.findByIdAndUpdate(
+        id,
+        {
+          $set: {
+            title,
+            description,
+          },
+        },
+        {
+          new: true,
+        }
+      );
+
+      if (!updatedCard) {
+        return responseServer.notFound(res, "Card not found");
+      }
+
+      return responseServer.success(res, `Card ${updatedCard.title} updated!`);
+    } catch (error) {
+      return responseServer.error(res);
+    }
+  }
+
+  async copyCard(req: Request, res: Response) {
+    const { listId, cardId, title, description } = req.body;
+
+    if (!listId || !cardId || !title) {
+      return responseServer.badRequest(res);
+    }
+
+    try {
+      // Find card documents by id
+      const card = await CardSchema.findById(cardId).lean();
+
+      if (!card) {
+        return responseServer.notFound(res, "Card not found!");
+      }
+
+      // Update all order of card documents increased by 1
+      await CardSchema.updateMany(
+        {
+          order: {
+            $gte: card.order + 1,
+          },
+        },
+        {
+          $inc: {
+            order: 1,
+          },
+        }
+      );
+
+      // Create card document
+      await CardSchema.create({
+        title: `${title} - Copy`,
+        order: card ? card.order + 1 : 1,
+        description,
+        listId,
+      });
+
+      return responseServer.success(res, `Card ${title} copied!`);
+    } catch (error) {
+      return responseServer.error(res);
+    }
+  }
+
+  async deleteCard(req: Request, res: Response) {
+    const { id } = req.params;
+
+    if (!id) {
+      return responseServer.badRequest(res);
+    }
+
+    try {
+      // Find card by id and if any will be delete
+      const deletedCard = await CardSchema.findByIdAndDelete(id).lean();
+
+      if (!deletedCard) {
+        return responseServer.notFound(res, "Card not found");
+      }
+
+      return responseServer.success(res, `Card ${deletedCard.title} deleted!`);
+    } catch (error) {
+      return responseServer.error(res);
+    }
+  }
 }
 
 export default new CardController();
