@@ -23,23 +23,11 @@ class CardController {
 
       const lengthOfCard = await CardSchema.find({ listId }).lean();
 
-      const createdCard = await CardSchema.create({
+      await CardSchema.create({
         title,
         order: lengthOfCard ? lengthOfCard.length + 1 : 1,
         listId,
       });
-
-      await ListSchema.findByIdAndUpdate(
-        list._id,
-        {
-          $push: {
-            cards: createdCard._id,
-          },
-        },
-        {
-          new: true,
-        }
-      );
 
       return responseServer.success(res, `Card "${title}" created!`);
     } catch (error) {

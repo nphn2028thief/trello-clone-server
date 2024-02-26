@@ -35,6 +35,9 @@ dependencies:
   morgan:
     specifier: ^1.10.0
     version: 1.10.0
+  stripe:
+    specifier: ^14.18.0
+    version: 14.18.0
   ts-node-dev:
     specifier: ^2.0.0
     version: 2.0.0(@types/node@20.11.17)(typescript@5.3.3)
@@ -1472,6 +1475,14 @@ packages:
   /strip-json-comments@2.0.1:
     resolution: {integrity: sha512-4gB8na07fecVVkOI6Rs4e7T6NOTki5EmL7TUduTs6bu3EdnSycntVJ4re8kgZA+wx9IueI2Y11bfbgwtzuE0KQ==}
     engines: {node: '>=0.10.0'}
+    dev: false
+
+  /stripe@14.18.0:
+    resolution: {integrity: sha512-yLqKPqYgGJbMxrQiE4+i2i00ZVA2NRIZbZ1rejzj5XR3F3Uc+1iy9QE133knZudhVGMw367b8vTpB8D9pYMETw==}
+    engines: {node: '>=12.*'}
+    dependencies:
+      '@types/node': 20.11.17
+      qs: 6.11.0
     dev: false
 
   /supports-preserve-symlinks-flag@1.0.0:
