@@ -5,6 +5,8 @@ import BoardSchema from "../models/BoardSchema";
 import ListSchema from "../models/ListSchema";
 import CardSchema from "../models/CardSchema";
 import { IImage } from "../types/board";
+import OrgLitmitSchema from "../models/OrgLitmitSchema";
+import { MAX_FREE_BOARD } from "../constants/board";
 
 class BoardController {
   async createBoard(req: Request, res: Response) {
@@ -22,6 +24,34 @@ class BoardController {
         username: image.split("|")[3],
         linkHtml: image.split("|")[4],
       };
+
+      // Find orgLimit document by orgId
+      const orgLimit = await OrgLitmitSchema.findOne({ orgId }).lean();
+
+      // Increase available count
+      if (orgLimit) {
+        if (orgLimit.count >= MAX_FREE_BOARD) {
+          return responseServer.badRequest(
+            res,
+            "You have reached your limit of free boards. Please upgraded to create more!"
+          );
+        }
+
+        await OrgLitmitSchema.findOneAndUpdate(
+          { orgId },
+          {
+            $set: {
+              count: orgLimit.count + 1,
+            },
+          },
+          { new: true }
+        );
+      } else {
+        await OrgLitmitSchema.create({
+          orgId,
+          count: 1,
+        });
+      }
 
       // Create board document
       await BoardSchema.create({
@@ -116,11 +146,17 @@ class BoardController {
     }
 
     try {
+      // Find board document by id
       const board = await BoardSchema.findByIdAndDelete(id).lean();
 
       if (!board) {
         return responseServer.notFound(res, "Board not found!");
       }
+
+      // // Find orgLimit document by orgId
+      const orgLimit = await OrgLitmitSchema.findOne({
+        orgId: board.orgId,
+      }).lean();
 
       const lists = await ListSchema.find({ boardId: board._id }).lean();
 
@@ -135,6 +171,24 @@ class BoardController {
 
       // Delete all lists have boardId belonging to board
       await ListSchema.deleteMany({ boardId: board._id });
+
+      // Decrease available count
+      if (orgLimit) {
+        await OrgLitmitSchema.findOneAndUpdate(
+          { orgId: board.orgId },
+          {
+            $set: {
+              count: orgLimit.count > 0 ? orgLimit.count - 1 : 0,
+            },
+          },
+          { new: true }
+        );
+      } else {
+        await OrgLitmitSchema.create({
+          orgId: board.orgId,
+          count: 1,
+        });
+      }
 
       return responseServer.success(res, "Board deleted!");
     } catch (error) {
