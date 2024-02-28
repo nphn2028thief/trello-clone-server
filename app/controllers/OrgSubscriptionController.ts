@@ -7,10 +7,8 @@ import envConfig from "../configs/envConfig";
 import OrgSubscriptionSchema from "../models/OrgSubscriptionSchema";
 
 class OrgSubscriptionController {
-  async stripe(req: Request, res: Response) {
+  async createPaymentStripe(req: Request, res: Response) {
     const { userId, userEmail, orgId } = req.body;
-
-    console.log({ userId, userEmail, orgId });
 
     let url = "";
     const settingUrl = `${envConfig.clientUrl}/organization/${orgId}`;
@@ -70,8 +68,8 @@ class OrgSubscriptionController {
   }
 
   async stripeWebhook(req: Request, res: Response) {
-    const body = req.body;
-    const signature = req.headers["stripe-signature"] as string;
+    const body = JSON.stringify(req.body);
+    const signature = req.headers["Stripe-Signature"] as string;
 
     let event: Stripe.Event;
 
@@ -82,6 +80,7 @@ class OrgSubscriptionController {
         envConfig.stripeWebhookApi
       );
     } catch (error) {
+      console.log("event error: ", error);
       return responseServer.error(res, "Webhook is error!");
     }
 
@@ -126,6 +125,7 @@ class OrgSubscriptionController {
 
       return responseServer.success(res);
     } catch (error) {
+      console.log("Query error: ", error);
       return responseServer.error(res);
     }
   }
