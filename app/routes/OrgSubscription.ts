@@ -1,9 +1,16 @@
-import { Router } from "express";
-import OrgSubscriptionControllerCopy from "../controllers/OrgSubscriptionController";
+import { Router, raw } from "express";
+import OrgSubscriptionController from "../controllers/OrgSubscriptionController";
 
 const orgSubscriptionRoutes = (router: Router) => {
-  router.post("/org-subscription", OrgSubscriptionControllerCopy.stripe);
-  router.post("/webhook", OrgSubscriptionControllerCopy.stripeWebhook);
+  router.post(
+    "/org-subscription",
+    OrgSubscriptionController.createPaymentStripe
+  );
+  router.post(
+    "/webhook",
+    raw({ type: "application/json" }),
+    OrgSubscriptionController.stripeWebhook
+  );
 };
 
 export default orgSubscriptionRoutes;
