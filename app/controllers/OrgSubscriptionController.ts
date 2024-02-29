@@ -5,6 +5,7 @@ import responseServer from "../configs/responseServer";
 import { stripe } from "../configs/stripe";
 import envConfig from "../configs/envConfig";
 import OrgSubscriptionSchema from "../models/OrgSubscriptionSchema";
+import { checkSubscription } from "../utils/subscription";
 
 class OrgSubscriptionController {
   async createPaymentStripe(req: Request, res: Response) {
@@ -68,19 +69,22 @@ class OrgSubscriptionController {
   }
 
   async stripeWebhook(req: Request, res: Response) {
-    const body = JSON.stringify(req.body);
-    const signature = req.headers["Stripe-Signature"] as string;
+    const payload = req.body;
+    const payloadString = JSON.stringify(payload, null, 2);
+    const signature = stripe.webhooks.generateTestHeaderString({
+      payload: payloadString,
+      secret: envConfig.stripeWebhookApi,
+    });
 
     let event: Stripe.Event;
 
     try {
       event = stripe.webhooks.constructEvent(
-        body,
+        payloadString,
         signature,
         envConfig.stripeWebhookApi
       );
     } catch (error) {
-      console.log("event error: ", error);
       return responseServer.error(res, "Webhook is error!");
     }
 
@@ -125,9 +129,20 @@ class OrgSubscriptionController {
 
       return responseServer.success(res);
     } catch (error) {
-      console.log("Query error: ", error);
       return responseServer.error(res);
     }
+  }
+
+  async checkOrgSubscription(req: Request, res: Response) {
+    const { orgId } = req.params;
+
+    if (!orgId) {
+      return responseServer.badRequest(res, "Organization is invalid!");
+    }
+
+    const isValid = await checkSubscription(orgId);
+
+    return res.json({ isValid });
   }
 }
 
