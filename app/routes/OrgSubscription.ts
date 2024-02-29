@@ -11,6 +11,10 @@ const orgSubscriptionRoutes = (router: Router) => {
     raw({ type: "application/json" }),
     OrgSubscriptionController.stripeWebhook
   );
+  router.get(
+    "/org-subscription/:orgId",
+    OrgSubscriptionController.checkOrgSubscription
+  );
 };
 
 export default orgSubscriptionRoutes;

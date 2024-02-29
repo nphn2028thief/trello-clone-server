@@ -4,9 +4,10 @@ import responseServer from "../configs/responseServer";
 import BoardSchema from "../models/BoardSchema";
 import ListSchema from "../models/ListSchema";
 import CardSchema from "../models/CardSchema";
-import { IImage } from "../types/board";
 import OrgLitmitSchema from "../models/OrgLitmitSchema";
 import { MAX_FREE_BOARD } from "../constants/board";
+import { checkSubscription } from "../utils/subscription";
+import { IImage } from "../types/board";
 
 class BoardController {
   async createBoard(req: Request, res: Response) {
@@ -28,9 +29,12 @@ class BoardController {
       // Find orgLimit document by orgId
       const orgLimit = await OrgLitmitSchema.findOne({ orgId }).lean();
 
+      // Check org subscription
+      const isValid = await checkSubscription(orgId);
+
       // Increase available count
       if (orgLimit) {
-        if (orgLimit.count >= MAX_FREE_BOARD) {
+        if (!isValid && orgLimit.count >= MAX_FREE_BOARD) {
           return responseServer.badRequest(
             res,
             "You have reached your limit of free boards. Please upgraded to create more!"
@@ -158,6 +162,9 @@ class BoardController {
         orgId: board.orgId,
       }).lean();
 
+      // Check org subscription
+      const isValid = await checkSubscription(board.orgId);
+
       const lists = await ListSchema.find({ boardId: board._id }).lean();
 
       const listIds = lists.map((list) => list._id);
@@ -174,15 +181,17 @@ class BoardController {
 
       // Decrease available count
       if (orgLimit) {
-        await OrgLitmitSchema.findOneAndUpdate(
-          { orgId: board.orgId },
-          {
-            $set: {
-              count: orgLimit.count > 0 ? orgLimit.count - 1 : 0,
+        if (!isValid) {
+          await OrgLitmitSchema.findOneAndUpdate(
+            { orgId: board.orgId },
+            {
+              $set: {
+                count: orgLimit.count > 0 ? orgLimit.count - 1 : 0,
+              },
             },
-          },
-          { new: true }
-        );
+            { new: true }
+          );
+        }
       } else {
         await OrgLitmitSchema.create({
           orgId: board.orgId,
