@@ -1,20 +1,32 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
+import clerkClient from "@clerk/clerk-sdk-node";
 
 import responseServer from "../configs/responseServer";
 import ListSchema from "../models/ListSchema";
 import CardSchema from "../models/CardSchema";
+import LogSchema from "../models/LogSchema";
+import { ACTION, ENTITY_TYPE } from "../constants/log";
 import { IUpdateOrderCard } from "../types/card";
 
 class CardController {
   async createCard(req: Request, res: Response) {
-    const { title, listId } = req.body;
+    const { title, listId, orgId, userId } = req.body;
 
-    if (!title || !listId) {
+    if (!title || !listId || !orgId || !userId) {
       return responseServer.badRequest(res);
     }
 
     try {
+      // Find user using clerk
+      const user = await clerkClient.users.getUser(userId);
+
+      if (!user) {
+        return responseServer.notFound(res, "User not found!");
+      }
+
+      const { firstName, lastName, imageUrl } = user;
+
       const list = await ListSchema.findById(listId).lean();
 
       if (!list) {
@@ -23,10 +35,27 @@ class CardController {
 
       const lengthOfCard = await CardSchema.find({ listId }).lean();
 
-      await CardSchema.create({
+      const createdCard = await CardSchema.create({
         title,
         order: lengthOfCard ? lengthOfCard.length + 1 : 1,
         listId,
+      });
+
+      // Create audit logs create card
+      await LogSchema.create({
+        action: ACTION.CREATE,
+        orgId,
+        entity: {
+          id: createdCard._id,
+          type: ENTITY_TYPE.CARD,
+          title: createdCard.title,
+        },
+        user: {
+          id: userId,
+          firstName,
+          lastName,
+          image: imageUrl,
+        },
       });
 
       return responseServer.success(res, `Card "${title}" created!`);
@@ -79,13 +108,26 @@ class CardController {
 
   async updateCard(req: Request, res: Response) {
     const { id } = req.params;
-    const { title, description } = req.body;
+    const { title, description, userId, orgId } = req.body;
 
     if (!id) {
       return responseServer.badRequest(res, "Card is invalid!");
     }
 
+    if (!userId || !orgId) {
+      return responseServer.badRequest(res);
+    }
+
     try {
+      // Find user using clerk
+      const user = await clerkClient.users.getUser(userId);
+
+      if (!user) {
+        return responseServer.notFound(res, "User not found!");
+      }
+
+      const { firstName, lastName, imageUrl } = user;
+
       const updatedCard = await CardSchema.findByIdAndUpdate(
         id,
         {
@@ -102,6 +144,23 @@ class CardController {
       if (!updatedCard) {
         return responseServer.notFound(res, "Card not found");
       }
+
+      // Create audit logs update card
+      await LogSchema.create({
+        action: ACTION.UPDATE,
+        orgId,
+        entity: {
+          id: updatedCard._id,
+          type: ENTITY_TYPE.CARD,
+          title: updatedCard.title,
+        },
+        user: {
+          id: userId,
+          firstName,
+          lastName,
+          image: imageUrl,
+        },
+      });
 
       return responseServer.success(res, `Card ${updatedCard.title} updated!`);
     } catch (error) {
@@ -153,19 +212,45 @@ class CardController {
   }
 
   async deleteCard(req: Request, res: Response) {
-    const { id } = req.params;
+    const { id, orgId, userId } = req.params;
 
-    if (!id) {
+    if (!id || !orgId || !userId) {
       return responseServer.badRequest(res);
     }
 
     try {
+      // Find user using clerk
+      const user = await clerkClient.users.getUser(userId);
+
+      if (!user) {
+        return responseServer.notFound(res, "User not found!");
+      }
+
+      const { firstName, lastName, imageUrl } = user;
+
       // Find card by id and if any will be delete
       const deletedCard = await CardSchema.findByIdAndDelete(id).lean();
 
       if (!deletedCard) {
         return responseServer.notFound(res, "Card not found");
       }
+
+      // Create audit logs delete card
+      await LogSchema.create({
+        action: ACTION.DELETE,
+        orgId,
+        entity: {
+          id: deletedCard._id,
+          type: ENTITY_TYPE.CARD,
+          title: deletedCard.title,
+        },
+        user: {
+          id: userId,
+          firstName,
+          lastName,
+          image: imageUrl,
+        },
+      });
 
       return responseServer.success(res, `Card ${deletedCard.title} deleted!`);
     } catch (error) {

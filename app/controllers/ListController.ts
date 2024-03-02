@@ -1,26 +1,56 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
+import clerkClient from "@clerk/clerk-sdk-node";
 
 import responseServer from "../configs/responseServer";
 import ListSchema from "../models/ListSchema";
 import CardSchema from "../models/CardSchema";
+import LogSchema from "../models/LogSchema";
+import { ACTION, ENTITY_TYPE } from "../constants/log";
 import { IUpdateOrderList } from "../types/list";
 
 class ListController {
   async createList(req: Request, res: Response) {
-    const { title, boardId, orgId } = req.body;
+    const { title, boardId, orgId, userId } = req.body;
 
-    if (!title || !boardId || !orgId) {
+    if (!title || !boardId || !orgId || !userId) {
       return responseServer.badRequest(res);
     }
 
     try {
+      // Find user using clerk
+      const user = await clerkClient.users.getUser(userId);
+
+      if (!user) {
+        return responseServer.notFound(res, "User not found!");
+      }
+
+      const { firstName, lastName, imageUrl } = user;
+
+      // Find length of list documents by boardId
       const lengthOfList = await ListSchema.find({ boardId }).lean();
 
-      await ListSchema.create({
+      const createdList = await ListSchema.create({
         title,
         order: lengthOfList ? lengthOfList.length + 1 : 1,
         boardId,
+      });
+
+      // Create audit logs create list
+      await LogSchema.create({
+        action: ACTION.CREATE,
+        orgId,
+        entity: {
+          id: createdList._id,
+          type: ENTITY_TYPE.LIST,
+          title: createdList.title,
+        },
+        user: {
+          id: userId,
+          firstName,
+          lastName,
+          image: imageUrl,
+        },
       });
 
       return responseServer.success(res, `List "${title}" created!`);
@@ -49,6 +79,14 @@ class ListController {
         .lean()
         .sort({ order: "asc" });
 
+      // Get all log documents by orgId, cardId and type is CARD
+      const logs = await LogSchema.find({
+        orgId,
+        "entity.type": ENTITY_TYPE.CARD,
+      })
+        .lean()
+        .sort({ createdAt: "desc" });
+
       // Filter card documents with listId belonging to lists
       const listsWithCards = lists.map((list) => ({
         ...list,
@@ -57,6 +95,9 @@ class ListController {
           .map((item) => ({
             ...item,
             listTitle: list.title,
+            logs: logs.filter(
+              (log) => log.entity.id === item._id.toHexString()
+            ),
           })),
       }));
 
@@ -68,23 +109,63 @@ class ListController {
 
   async updateList(req: Request, res: Response) {
     const { id } = req.params;
-    const { title } = req.body;
+    const { title, orgId, userId } = req.body;
 
     if (!id) {
       return responseServer.badRequest(res, "List is invalid!");
     }
 
+    if (!orgId) {
+      return responseServer.badRequest(res, "Organization is invalid!");
+    }
+
+    if (!userId) {
+      return responseServer.badRequest(res, "User is invalid!");
+    }
+
     try {
       // Update title of list document
-      const updatedList = await ListSchema.findByIdAndUpdate(id, {
-        $set: {
-          title,
+      const updatedList = await ListSchema.findByIdAndUpdate(
+        id,
+        {
+          $set: {
+            title,
+          },
         },
-      });
+        {
+          new: true,
+        }
+      );
 
       if (!updatedList) {
         return responseServer.notFound(res, "List not found!");
       }
+
+      // Find user using clerk
+      const user = await clerkClient.users.getUser(userId);
+
+      if (!user) {
+        return responseServer.notFound(res, "User not found!");
+      }
+
+      const { firstName, lastName, imageUrl } = user;
+
+      // Create audit logs update list
+      await LogSchema.create({
+        action: ACTION.UPDATE,
+        orgId,
+        entity: {
+          id: updatedList._id,
+          type: ENTITY_TYPE.LIST,
+          title: updatedList.title,
+        },
+        user: {
+          id: userId,
+          firstName,
+          lastName,
+          image: imageUrl,
+        },
+      });
 
       return responseServer.success(res, "Updated list!");
     } catch (error) {
@@ -112,7 +193,6 @@ class ListController {
 
       return responseServer.success(res);
     } catch (error) {
-      console.log(error);
       return responseServer.error(res);
     }
   }
@@ -172,13 +252,30 @@ class ListController {
   }
 
   async deleteList(req: Request, res: Response) {
-    const { id } = req.params;
+    const { id, userId, orgId } = req.params;
 
     if (!id) {
       return responseServer.badRequest(res, "List is invalid!");
     }
 
+    if (!userId) {
+      return responseServer.badRequest(res, "User is invalid!");
+    }
+
+    if (!orgId) {
+      return responseServer.badRequest(res, "Organization is invalid!");
+    }
+
     try {
+      // Find user using clerk
+      const user = await clerkClient.users.getUser(userId);
+
+      if (!user) {
+        return responseServer.notFound(res, "User not found!");
+      }
+
+      const { firstName, lastName, imageUrl } = user;
+
       const deletedList = await ListSchema.findByIdAndDelete(id).lean();
 
       if (!deletedList) {
@@ -205,6 +302,23 @@ class ListController {
           },
         }
       );
+
+      // Create audit logs delete list
+      await LogSchema.create({
+        action: ACTION.DELETE,
+        orgId,
+        entity: {
+          id: deletedList._id,
+          type: ENTITY_TYPE.LIST,
+          title: deletedList.title,
+        },
+        user: {
+          id: userId,
+          firstName,
+          lastName,
+          image: imageUrl,
+        },
+      });
 
       return responseServer.success(
         res,
