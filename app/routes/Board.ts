@@ -7,7 +7,7 @@ const boardRoutes = (router: Router) => {
   router.get("/boards/:orgId", BoardController.getBoards);
   router.get("/boards/:orgId/:boardId", BoardController.getBoardById);
   router.patch("/board/:id", BoardController.updateBoard);
-  router.delete("/board/:id", BoardController.deleteBoard);
+  router.delete("/board/:id/:userId", BoardController.deleteBoard);
 };
 
 export default boardRoutes;

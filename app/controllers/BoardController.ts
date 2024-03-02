@@ -1,19 +1,22 @@
 import { Request, Response } from "express";
+import clerkClient from "@clerk/clerk-sdk-node";
 
 import responseServer from "../configs/responseServer";
 import BoardSchema from "../models/BoardSchema";
 import ListSchema from "../models/ListSchema";
 import CardSchema from "../models/CardSchema";
+import LogSchema from "../models/LogSchema";
 import OrgLitmitSchema from "../models/OrgLitmitSchema";
 import { MAX_FREE_BOARD } from "../constants/board";
+import { ACTION, ENTITY_TYPE } from "../constants/log";
 import { checkSubscription } from "../utils/subscription";
 import { IImage } from "../types/board";
 
 class BoardController {
   async createBoard(req: Request, res: Response) {
-    const { orgId, title, image } = req.body;
+    const { userId, orgId, title, image } = req.body;
 
-    if (!orgId || !title || !image) {
+    if (!userId || !orgId || !title || !image) {
       return responseServer.badRequest(res);
     }
 
@@ -25,6 +28,15 @@ class BoardController {
         username: image.split("|")[3],
         linkHtml: image.split("|")[4],
       };
+
+      // Find user using clerk
+      const user = await clerkClient.users.getUser(userId);
+
+      if (!user) {
+        return responseServer.notFound(res, "User not found!");
+      }
+
+      const { id, firstName, lastName, imageUrl } = user;
 
       // Find orgLimit document by orgId
       const orgLimit = await OrgLitmitSchema.findOne({ orgId }).lean();
@@ -58,10 +70,27 @@ class BoardController {
       }
 
       // Create board document
-      await BoardSchema.create({
+      const createdBoard = await BoardSchema.create({
         orgId,
         title,
         image: storageImage,
+      });
+
+      // Create audit logs create board
+      await LogSchema.create({
+        action: ACTION.CREATE,
+        orgId,
+        entity: {
+          id: createdBoard._id,
+          type: ENTITY_TYPE.BOARD,
+          title: createdBoard.title,
+        },
+        user: {
+          id,
+          firstName,
+          lastName,
+          image: imageUrl,
+        },
       });
 
       return responseServer.success(res, "Board created!");
@@ -112,13 +141,26 @@ class BoardController {
 
   async updateBoard(req: Request, res: Response) {
     const { id } = req.params;
-    const { title } = req.body;
+    const { userId, title } = req.body;
 
     if (!id) {
       return responseServer.badRequest(res, "Board is invalid!");
     }
 
+    if (!userId) {
+      return responseServer.badRequest(res, "User is invalid!");
+    }
+
     try {
+      // Find user using clerk
+      const user = await clerkClient.users.getUser(userId);
+
+      if (!user) {
+        return responseServer.notFound(res, "User not found!");
+      }
+
+      const { firstName, lastName, imageUrl } = user;
+
       // Update title of board document by id
       const updatedBoard = await BoardSchema.findByIdAndUpdate(
         id,
@@ -136,6 +178,23 @@ class BoardController {
         return responseServer.notFound(res, "Board not found!");
       }
 
+      // Create audit logs update board
+      await LogSchema.create({
+        action: ACTION.UPDATE,
+        orgId: updatedBoard.orgId,
+        entity: {
+          id: updatedBoard._id,
+          type: ENTITY_TYPE.BOARD,
+          title,
+        },
+        user: {
+          id: userId,
+          firstName,
+          lastName,
+          image: imageUrl,
+        },
+      });
+
       return responseServer.success(res, "Updated board!");
     } catch (error) {
       return responseServer.error(res);
@@ -143,29 +202,38 @@ class BoardController {
   }
 
   async deleteBoard(req: Request, res: Response) {
-    const { id } = req.params;
+    const { id, userId } = req.params;
 
-    if (!id) {
+    if (!id || !userId) {
       return responseServer.badRequest(res);
     }
 
     try {
-      // Find board document by id
-      const board = await BoardSchema.findByIdAndDelete(id).lean();
+      // Find board document by id and delete if any
+      const deletedBoard = await BoardSchema.findByIdAndDelete(id).lean();
 
-      if (!board) {
+      if (!deletedBoard) {
         return responseServer.notFound(res, "Board not found!");
       }
 
+      // Find user using clerk
+      const user = await clerkClient.users.getUser(userId);
+
+      if (!user) {
+        return responseServer.notFound(res, "User not found!");
+      }
+
+      const { firstName, lastName, imageUrl } = user;
+
       // // Find orgLimit document by orgId
       const orgLimit = await OrgLitmitSchema.findOne({
-        orgId: board.orgId,
+        orgId: deletedBoard.orgId,
       }).lean();
 
       // Check org subscription
-      const isValid = await checkSubscription(board.orgId);
+      const isValid = await checkSubscription(deletedBoard.orgId);
 
-      const lists = await ListSchema.find({ boardId: board._id }).lean();
+      const lists = await ListSchema.find({ boardId: deletedBoard._id }).lean();
 
       const listIds = lists.map((list) => list._id);
 
@@ -177,13 +245,13 @@ class BoardController {
       });
 
       // Delete all lists have boardId belonging to board
-      await ListSchema.deleteMany({ boardId: board._id });
+      await ListSchema.deleteMany({ boardId: deletedBoard._id });
 
       // Decrease available count
       if (orgLimit) {
         if (!isValid) {
           await OrgLitmitSchema.findOneAndUpdate(
-            { orgId: board.orgId },
+            { orgId: deletedBoard.orgId },
             {
               $set: {
                 count: orgLimit.count > 0 ? orgLimit.count - 1 : 0,
@@ -194,10 +262,27 @@ class BoardController {
         }
       } else {
         await OrgLitmitSchema.create({
-          orgId: board.orgId,
+          orgId: deletedBoard.orgId,
           count: 1,
         });
       }
+
+      // Create audit logs delete board
+      await LogSchema.create({
+        action: ACTION.DELETE,
+        orgId: deletedBoard.orgId,
+        entity: {
+          id: deletedBoard._id,
+          type: ENTITY_TYPE.BOARD,
+          title: deletedBoard.title,
+        },
+        user: {
+          id: userId,
+          firstName,
+          lastName,
+          image: imageUrl,
+        },
+      });
 
       return responseServer.success(res, "Board deleted!");
     } catch (error) {

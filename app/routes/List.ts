@@ -8,7 +8,7 @@ const listRoutes = (router: Router) => {
   router.get("/lists/:boardId/:orgId", ListController.getLists);
   router.patch("/list/order", ListController.updateListOrder);
   router.patch("/list/:id", ListController.updateList);
-  router.delete("/list/:id", ListController.deleteList);
+  router.delete("/list/:id/:userId/:orgId", ListController.deleteList);
 };
 
 export default listRoutes;
